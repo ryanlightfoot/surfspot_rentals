@@ -1,5 +1,10 @@
 /* Mobile Responsive Styles for Surfboard Rental App */
 
+/* Prevent overscroll/bounce past top/bottom */
+html, body {
+  overscroll-behavior: none;
+}
+
 /* Navigation */
 .mobile-menu {
   display: none;
@@ -91,6 +96,10 @@
 .map-container {
   height: 100%;
   min-height: 400px;
+}
+
+.leaflet-container {
+  transition: background-color 0.3s ease;
 }
 
 .map-sidebar {

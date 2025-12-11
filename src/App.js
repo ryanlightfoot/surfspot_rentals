@@ -206,6 +206,16 @@ const BOARDS = [
   }
 ];
 
+// Demo auth seed (for front-end testing only)
+const DEFAULT_USERS = [
+  {
+    id: 'demo-1',
+    name: 'Demo Surfer',
+    email: 'demo@quiverpass.com',
+    password: 'surf123' // Plain text only for demo; do not use in production
+  }
+];
+
 // --- COMPONENTS ---
 
 // 1. Navigation Bar
@@ -344,12 +354,20 @@ const Home = ({ setPage }) => (
 );
 
 // 3. Map View
-const MapView = ({ onSelectBoard }) => {
+const MapView = ({ onSelectBoard, darkMode }) => {
   const [activeShopId, setActiveShopId] = useState(null);
   
   // Center to show both South Africa and New Zealand (Indian Ocean view)
   const center = [-35, 100];
   const zoom = 3;
+
+  // Switch tiles based on theme
+  const tileUrl = darkMode
+    ? "https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png"
+    : "https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+  const tileAttribution = darkMode
+    ? '&copy; <a href="https://stadiamaps.com/">Stadia Maps</a>, &copy; <a href="https://openmaptiles.org/">OpenMapTiles</a> &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+    : '&copy; <a href="https://carto.com/attributions">CARTO</a>';
 
   const activeShop = activeShopId ? SHOPS.find(s => s.id === activeShopId) : null;
   const filteredBoards = activeShopId 
@@ -360,10 +378,16 @@ const MapView = ({ onSelectBoard }) => {
     <div className="map-view-wrapper flex flex-col md:flex-row">
       {/* Left: Interactive Map */}
       <div className="w-full md:w-2/3 map-container relative z-0">
-        <MapContainer center={center} zoom={zoom} scrollWheelZoom={true} style={{ height: "100%", width: "100%", minHeight: "400px" }}>
+        <MapContainer 
+          key={darkMode ? 'map-dark' : 'map-light'}
+          center={center} 
+          zoom={zoom} 
+          scrollWheelZoom={true} 
+          style={{ height: "100%", width: "100%", minHeight: "400px" }}
+        >
           <TileLayer
-            attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-            url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            attribution={tileAttribution}
+            url={tileUrl}
           />
           {SHOPS.map((shop) => (
             <Marker 
@@ -547,44 +571,74 @@ const BoardCard = ({ board, onSelect }) => (
 
 // 6. Catalog View (Grid) - Updated to use BoardCard
 const Catalog = ({ onSelectBoard }) => {
-  const [selectedCity, setSelectedCity] = useState('All');
+  const [searchCity, setSearchCity] = useState('');
+  const [selectedCity, setSelectedCity] = useState('');
+  const [showCityDropdown, setShowCityDropdown] = useState(false);
   const [selectedType, setSelectedType] = useState('All');
 
-  // Extract unique cities from SHOPS
-  const cities = ['All', ...new Set(SHOPS.map(shop => shop.location))];
-  
-  // Extract unique types from BOARDS
+  // Extract unique cities and types
+  const cities = [...new Set(SHOPS.map(shop => shop.location))];
   const types = ['All', ...new Set(BOARDS.map(board => board.type))];
 
-  // Filter Logic
+  // City suggestions (does not filter cards)
+  const cityQuery = searchCity.trim().toLowerCase();
+  const citySuggestions = cityQuery
+    ? cities
+        .filter(city => city.toLowerCase().includes(cityQuery))
+        .sort((a, b) => a.toLowerCase().indexOf(cityQuery) - b.toLowerCase().indexOf(cityQuery))
+    : cities.slice(0, 6); // show a few defaults when empty
+
+  // Filter Logic (only type-based now)
   const filteredBoards = BOARDS.filter(board => {
-    // 1. City Filter
-    // Find the shop for this board
     const shop = SHOPS.find(s => s.id === board.shopId);
-    const matchesCity = selectedCity === 'All' || (shop && shop.location === selectedCity);
-
-    // 2. Type Filter
+    const matchesCity = !selectedCity || (shop && shop.location === selectedCity);
     const matchesType = selectedType === 'All' || board.type === selectedType;
-
     return matchesCity && matchesType;
   });
 
   return (
     <div className="catalog-section max-w-7xl mx-auto px-4">
-      <div className="catalog-header flex flex-col md:flex-row justify-between items-start md:items-center">
+      <div className="catalog-header flex flex-col md:flex-row justify-between items-center md:items-center gap-4">
         <h2 className="catalog-title font-bold text-gray-900 dark:text-white">All Surfboards</h2>
         
         {/* Filters */}
-        <div className="catalog-filters">
-          <select 
-            value={selectedCity}
-            onChange={(e) => setSelectedCity(e.target.value)}
-            className="catalog-filter border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none"
-          >
-            {cities.map(city => (
-              <option key={city} value={city}>{city === 'All' ? 'All Cities' : city}</option>
-            ))}
-          </select>
+        <div className="catalog-filters w-full md:w-auto flex flex-col md:flex-row items-center gap-3 justify-center">
+          <div className="relative w-full md:w-72">
+            <input
+              type="text"
+              value={searchCity}
+              onChange={(e) => { setSearchCity(e.target.value); setShowCityDropdown(true); }}
+              onFocus={() => setShowCityDropdown(true)}
+              onBlur={() => setTimeout(() => setShowCityDropdown(false), 120)}
+              placeholder="Search city and select to filter"
+              className="catalog-filter w-full pr-10 border rounded-lg bg-white dark:bg-gray-800 dark:border-gray-700 dark:text-white shadow-sm focus:ring-2 focus:ring-blue-500 outline-none text-center"
+            />
+            {searchCity && (
+              <button
+                type="button"
+                onClick={() => { setSearchCity(''); setShowCityDropdown(false); }}
+                className="absolute inset-y-0 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 text-sm"
+                aria-label="Clear city search text"
+              >
+                ✕
+              </button>
+            )}
+
+            {showCityDropdown && citySuggestions.length > 0 && (
+              <div className="absolute z-20 mt-1 w-full bg-white dark:bg-gray-800 border border-gray-200 dark:border-gray-700 rounded-lg shadow-lg max-h-60 overflow-auto">
+                {citySuggestions.map((city) => (
+                  <button
+                    key={city}
+                    type="button"
+                    onMouseDown={() => { setSearchCity(city); setSelectedCity(city); setShowCityDropdown(false); }}
+                    className="w-full text-left px-3 py-2 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-200"
+                  >
+                    {city}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
 
           <select 
             value={selectedType}
@@ -595,9 +649,16 @@ const Catalog = ({ onSelectBoard }) => {
               <option key={type} value={type}>{type === 'All' ? 'All Board Types' : type}</option>
             ))}
           </select>
+
+          <button 
+            type="button"
+            onClick={() => { setSearchCity(''); setSelectedCity(''); setSelectedType('All'); }}
+            className="px-4 py-2 text-sm font-medium text-primary hover:text-primary-dark dark:text-blue-300 dark:hover:text-blue-200 border border-transparent hover:border-primary dark:hover:border-blue-300 rounded-lg transition"
+          >
+            Clear Filters
+          </button>
         </div>
       </div>
-
       {filteredBoards.length > 0 ? (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
           {filteredBoards.map((board) => (
@@ -608,11 +669,11 @@ const Catalog = ({ onSelectBoard }) => {
         <div className="text-center py-20 bg-canvas dark:bg-gray-800 rounded-xl border-2 border-dashed border-gray-200 dark:border-gray-700">
            <p className="text-xl text-gray-500 dark:text-gray-400">No boards found matching your filters.</p>
            <button 
-             onClick={() => {setSelectedCity('All'); setSelectedType('All');}}
-             className="mt-4 text-primary font-medium hover:underline"
-           >
-             Clear Filters
-           </button>
+            onClick={() => {setSearchCity(''); setSelectedCity(''); setSelectedType('All');}}
+            className="mt-4 text-primary font-medium hover:underline"
+          >
+            Clear Filters
+          </button>
         </div>
       )}
     </div>
@@ -715,6 +776,9 @@ const AuthPage = ({ onLogin, onBack }) => {
             {isLogin 
               ? 'Sign in to rent a board' 
               : 'Create an account to get started'}
+          </p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
+            Demo login: <span className="font-semibold">demo@quiverpass.com</span> / <span className="font-mono">surf123</span>
           </p>
         </div>
 
@@ -999,6 +1063,24 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(false);
   const [user, setUser] = useState(null);
 
+  // Seed demo user if none exist
+  useEffect(() => {
+    try {
+      const stored = JSON.parse(localStorage.getItem('quiverpass_users') || '[]');
+      const merged = [...stored];
+      DEFAULT_USERS.forEach((demoUser) => {
+        if (!stored.find((u) => u.email === demoUser.email)) {
+          merged.push(demoUser);
+        }
+      });
+      if (merged.length !== stored.length) {
+        localStorage.setItem('quiverpass_users', JSON.stringify(merged));
+      }
+    } catch (e) {
+      localStorage.setItem('quiverpass_users', JSON.stringify(DEFAULT_USERS));
+    }
+  }, []);
+
   // Load user from localStorage on mount
   useEffect(() => {
     const savedUser = localStorage.getItem('quiverpass_current_user');
@@ -1059,7 +1141,7 @@ export default function App() {
       case 'home':
         return <Home setPage={setCurrentPage} />;
       case 'map':
-        return <MapView onSelectBoard={handleSelectBoard} />;
+        return <MapView onSelectBoard={handleSelectBoard} darkMode={darkMode} />;
       case 'shops':
         return <VendorsList onSelectShop={handleSelectShop} />;
       case 'shop-detail':
